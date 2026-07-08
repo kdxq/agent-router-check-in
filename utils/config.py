@@ -63,6 +63,12 @@ class ProviderConfig:
 			persist_profile=data.get('persist_profile', default_persist_profile),
 		)
 
+	def login_url(self) -> str:
+		"""返回网页登录入口地址。"""
+		if self.name == 'agentrouter':
+			return 'https://agentrouter.org/login'
+		return f'{self.domain}{self.login_path}'
+
 	def needs_waf_cookies(self) -> bool:
 		"""判断是否需要获取 WAF cookies"""
 		return self.bypass_method == 'waf_cookies'

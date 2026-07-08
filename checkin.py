@@ -153,7 +153,7 @@ async def login_with_credentials(
 	method_label = 'GitHub OAuth' if auth_method == 'github' else 'email/password'
 	print(f'[PROCESSING] {account_name}: Logging in with {method_label}...')
 
-	login_url = f'{provider_config.domain}{provider_config.login_path}'
+	login_url = provider_config.login_url()
 	settings = load_browser_login_settings(
 		account_name,
 		provider_name,
@@ -285,7 +285,7 @@ async def prepare_cookies(account_name: str, provider_config, user_cookies: dict
 	waf_cookies = {}
 
 	if provider_config.needs_waf_cookies():
-		login_url = f'{provider_config.domain}{provider_config.login_path}'
+		login_url = provider_config.login_url()
 		waf_cookies = await get_waf_cookies_with_browser(
 			account_name,
 			login_url,

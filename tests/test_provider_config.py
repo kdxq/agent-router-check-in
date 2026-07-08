@@ -29,6 +29,17 @@ def test_provider_profile_persistence_can_override_builtin(monkeypatch):
 	assert config.providers['agentrouter'].persist_profile is True
 
 
+def test_agentrouter_login_url_is_fixed_even_when_provider_overrides_domain(monkeypatch):
+	monkeypatch.setenv(
+		'PROVIDERS',
+		json.dumps({'agentrouter': {'domain': 'https://example.invalid', 'login_path': '/wrong-login'}}),
+	)
+
+	config = AppConfig.load_from_env()
+
+	assert config.providers['agentrouter'].login_url() == 'https://agentrouter.org/login'
+
+
 def test_custom_provider_profile_persistence_defaults_to_false(monkeypatch):
 	monkeypatch.setenv('PROVIDERS', json.dumps({'custom': {'domain': 'https://custom.example.com'}}))
 
