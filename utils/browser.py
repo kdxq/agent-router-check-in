@@ -75,6 +75,11 @@ FORM_ACTION_TIMEOUT_MS = 15_000
 EMAIL_TAB_TIMEOUT_MS = 8_000
 WAF_READY_TIMEOUT_MS = 30_000
 SESSION_WAIT_TIMEOUT_MS = 45_000
+ACCESS_VERIFICATION_RE = re.compile(
+	r'Access Verification|complete the verification process|Please slide to verify|slide to verify|'
+	r'slide to complete|verify you are human|Access denied',
+	re.I,
+)
 
 _VISIBLE_CHECK_JS = """
 	const isVisible = (el) => {
@@ -92,6 +97,8 @@ _VISIBLE_CHECK_JS = """
 _SITE_READY_JS = f"""() => {{
 {_VISIBLE_CHECK_JS}
 	const text = document.body?.innerText || '';
+	const accessVerification = /Access Verification|complete the verification process|Please slide to verify|slide to verify|slide to complete|Access denied|verify you are human/i.test(text);
+	if (accessVerification) return false;
 	const blocked = /请进行验证|为了更好的访问体验|访问受限|Access denied|verify you are human/i.test(text);
 	if (blocked) return false;
 	const wafBlockers = document.querySelector(
@@ -110,6 +117,8 @@ _SITE_READY_JS = f"""() => {{
 _LOGIN_SHELL_READY_JS = f"""() => {{
 {_VISIBLE_CHECK_JS}
 	const text = document.body?.innerText || '';
+	const accessVerification = /Access Verification|complete the verification process|Please slide to verify|slide to verify|slide to complete|Access denied|verify you are human/i.test(text);
+	if (accessVerification) return false;
 	const blocked = /请进行验证|为了更好的访问体验|访问受限|Access denied|verify you are human/i.test(text);
 	if (blocked) return false;
 	return countVisible('.semi-card') > 0 || countVisible('#username') > 0 || countVisible('button') >= 2;
@@ -165,6 +174,10 @@ _OPEN_EMAIL_FORM_JS = """() => {
 class BrowserLoginResult:
 	cookies: dict[str, str]
 	api_user: str | None = None
+
+
+class AccessVerificationError(RuntimeError):
+	"""Raised when a provider returns an access-verification page instead of the app."""
 
 
 @dataclass(frozen=True)
@@ -311,6 +324,9 @@ async def wait_for_site_ready(page: Page, timeout_ms: int = WAF_READY_TIMEOUT_MS
 	try:
 		await page.wait_for_function(_SITE_READY_JS, timeout=waf_timeout)
 	except Exception:
+		state = await _get_access_verification_state(page)
+		if state:
+			raise AccessVerificationError(_format_access_verification_error(state))
 		await asyncio.sleep(3)
 	closed = await dismiss_popups(page)
 	if closed:
@@ -338,6 +354,58 @@ async def _wait_for_login_shell(page: Page, timeout_ms: int) -> bool:
 		return True
 	except Exception:  # nosec B110
 		return False
+
+
+def _looks_like_access_verification(text: str, title: str = '') -> bool:
+	return bool(ACCESS_VERIFICATION_RE.search(f'{title}\n{text}'))
+
+
+async def _get_access_verification_state(page: Page) -> dict[str, str] | None:
+	try:
+		state = await page.evaluate(
+			"""() => {
+				const bodyText = document.body?.innerText || '';
+				return {
+					url: location.href,
+					title: document.title || '',
+					bodyText,
+					bodySnippet: bodyText.trim().replace(/\\s+/g, ' ').slice(0, 300),
+				};
+			}"""
+		)
+	except Exception:  # nosec B110
+		return None
+	if not isinstance(state, dict):
+		return None
+	body_text = str(state.get('bodyText') or '')
+	title = str(state.get('title') or '')
+	if not _looks_like_access_verification(body_text, title):
+		return None
+
+	return {
+		'url': str(state.get('url') or ''),
+		'title': title,
+		'bodySnippet': str(state.get('bodySnippet') or ''),
+	}
+
+
+def _format_access_verification_error(state: dict[str, str], provider: str = '') -> str:
+	provider_hint = f' for {provider}' if provider else ''
+	return (
+		f'Access verification page detected{provider_hint}: {state.get("url", "")}. '
+		'Set CHECKIN_PROXY_URL locally or PROXY_SUBSCRIPTION_URL in GitHub Actions, then rerun.'
+	)
+
+
+async def _raise_if_access_verification(page: Page, *, provider: str = '', account_name: str = '') -> None:
+	state = await _get_access_verification_state(page)
+	if not state:
+		return
+
+	print(f'[FAILED] Login blocked by access verification page: {state.get("bodySnippet", "")}')
+	if provider and account_name:
+		await save_login_screenshot(page, provider, account_name, 'access-verification')
+	raise AccessVerificationError(_format_access_verification_error(state, provider=provider))
 
 
 async def navigate_login_page(
@@ -381,6 +449,7 @@ async def navigate_login_page(
 			if response:
 				print(f'[INFO] Login page HTTP status: {response.status}')
 			await _settle_page(page, 5, 20_000)
+			await _raise_if_access_verification(page, provider=provider, account_name=account_name)
 
 			if await _wait_for_login_shell(page, attempt_timeout):
 				await wait_for_site_ready(page, timeout_ms)
@@ -634,6 +703,7 @@ async def _log_login_page_state(page: Page, *, failed_requests: list[tuple[str, 
 				title: document.title || '',
 				readyState: document.readyState,
 				bodySnippet: (document.body?.innerText || '').trim().replace(/\\s+/g, ' ').slice(0, 300),
+				accessVerification: /Access Verification|complete the verification process|Please slide to verify|slide to verify|slide to complete|Access denied|verify you are human/i.test(document.body?.innerText || ''),
 				scriptCount: document.querySelectorAll('script').length,
 				hasSemiCard: !!document.querySelector('.semi-card'),
 				mailEntryCount: document.querySelectorAll('.semi-card button:has(.semi-icon-mail)').length,
