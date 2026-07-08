@@ -365,26 +365,40 @@ async def navigate_login_page(
 	except Exception as exc:
 		print(f'[WARN] Warmup navigation failed: {exc}')
 
-	for attempt in range(3):
-		print(f'[INFO] Navigating login page (attempt {attempt + 1}/3): {login_url}')
-		await page.goto(login_url, wait_until='load', timeout=attempt_timeout)
-		await _settle_page(page, 5, 20_000)
+	failed_requests: list[tuple[str, str]] = []
 
-		if await _wait_for_login_shell(page, attempt_timeout):
-			await wait_for_site_ready(page, timeout_ms)
-			if await page.evaluate(_LOGIN_SHELL_READY_JS):
-				return
+	async def on_request_failed(request) -> None:
+		if len(failed_requests) >= 10:
+			return
+		failure = request.failure or 'unknown failure'
+		failed_requests.append((request.url, failure))
 
-		print(f'[WARN] Login page shell not ready on attempt {attempt + 1}')
-		await _log_login_page_state(page)
-		if provider and account_name:
-			await save_login_screenshot(page, provider, account_name, f'login-shell-attempt-{attempt + 1}')
-		if attempt < 2:
-			await asyncio.sleep(5)
-			try:
-				await page.reload(wait_until='load', timeout=attempt_timeout)
-			except Exception:  # nosec B110
-				pass
+	page.on('requestfailed', on_request_failed)
+	try:
+		for attempt in range(3):
+			print(f'[INFO] Navigating login page (attempt {attempt + 1}/3): {login_url}')
+			response = await page.goto(login_url, wait_until='load', timeout=attempt_timeout)
+			if response:
+				print(f'[INFO] Login page HTTP status: {response.status}')
+			await _settle_page(page, 5, 20_000)
+
+			if await _wait_for_login_shell(page, attempt_timeout):
+				await wait_for_site_ready(page, timeout_ms)
+				if await page.evaluate(_LOGIN_SHELL_READY_JS):
+					return
+
+			print(f'[WARN] Login page shell not ready on attempt {attempt + 1}')
+			await _log_login_page_state(page, failed_requests=failed_requests)
+			if provider and account_name:
+				await save_login_screenshot(page, provider, account_name, f'login-shell-attempt-{attempt + 1}')
+			if attempt < 2:
+				await asyncio.sleep(5)
+				try:
+					await page.reload(wait_until='load', timeout=attempt_timeout)
+				except Exception:  # nosec B110
+					pass
+	finally:
+		page.remove_listener('requestfailed', on_request_failed)
 
 	raise TimeoutError(f'Login page never rendered: {login_url}')
 
@@ -602,7 +616,7 @@ async def _wait_for_username_input(page: Page, timeout_ms: int) -> bool:
 	return False
 
 
-async def _log_login_page_state(page: Page) -> None:
+async def _log_login_page_state(page: Page, *, failed_requests: list[tuple[str, str]] | None = None) -> None:
 	state = await page.evaluate(
 		"""() => {
 			const isVisible = (el) => {
@@ -616,6 +630,7 @@ async def _log_login_page_state(page: Page) -> None:
 				.filter(isVisible)
 				.map((b) => (b.innerText || '').trim().replace(/\\s+/g, ' ').slice(0, 60));
 			return {
+				url: location.href,
 				title: document.title || '',
 				readyState: document.readyState,
 				bodySnippet: (document.body?.innerText || '').trim().replace(/\\s+/g, ' ').slice(0, 300),
@@ -628,7 +643,11 @@ async def _log_login_page_state(page: Page) -> None:
 			};
 		}"""
 	)
-	debug_print(f'[INFO] Login page state: {state}')
+	print(f'[INFO] Login page state: {state}')
+	if failed_requests:
+		print('[INFO] Login page failed requests:')
+		for url, failure in failed_requests[:10]:
+			print(f'[INFO]   {failure}: {url[:180]}')
 
 
 async def _open_email_login_form(
