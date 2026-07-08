@@ -37,7 +37,7 @@ def test_agentrouter_login_url_is_fixed_even_when_provider_overrides_domain(monk
 
 	config = AppConfig.load_from_env()
 
-	assert config.providers['agentrouter'].login_url() == 'https://agentrouter.org/login'
+	assert config.providers['agentrouter'].login_url() == 'https://agentrouter.org/register'
 
 
 def test_custom_provider_profile_persistence_defaults_to_false(monkeypatch):
