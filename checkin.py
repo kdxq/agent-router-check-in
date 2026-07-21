@@ -390,25 +390,7 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 	all_cookies = None
 	resolved_api_user: str | None = None
 	auth_method = None
-	if account.has_github_credentials():
-		print(f'[INFO] {account_name}: Attempting GitHub OAuth login (priority)...')
-		assert account.github_username is not None and account.github_password is not None
-		login_result = await login_with_credentials(
-			account_name,
-			provider_config,
-			account.provider,
-			account.github_username,
-			account.github_password,
-			auth_method='github',
-		)
-		if login_result:
-			all_cookies = login_result.cookies
-			resolved_api_user = login_result.api_user
-			auth_method = 'github oauth'
-		else:
-			print(f'[FAILED] {account_name}: GitHub OAuth login failed, will not use stale session cookies')
-			return False, None, None
-	elif account.has_login_credentials():
+	if account.has_login_credentials():
 		print(f'[INFO] {account_name}: Attempting email/password login (priority)...')
 		assert account.email is not None and account.password is not None
 		login_result = await login_with_credentials(
@@ -424,6 +406,24 @@ async def check_in_account(account: AccountConfig, account_index: int, app_confi
 			auth_method = 'email/password'
 		else:
 			print(f'[FAILED] {account_name}: Email/password login failed, will not use stale session cookies')
+			return False, None, None
+	elif account.has_github_credentials():
+		print(f'[INFO] {account_name}: Attempting GitHub OAuth login (compatibility)...')
+		assert account.github_username is not None and account.github_password is not None
+		login_result = await login_with_credentials(
+			account_name,
+			provider_config,
+			account.provider,
+			account.github_username,
+			account.github_password,
+			auth_method='github',
+		)
+		if login_result:
+			all_cookies = login_result.cookies
+			resolved_api_user = login_result.api_user
+			auth_method = 'github oauth'
+		else:
+			print(f'[FAILED] {account_name}: GitHub OAuth login failed, will not use stale session cookies')
 			return False, None, None
 	else:
 		user_cookies = parse_cookies(account.cookies)

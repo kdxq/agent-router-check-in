@@ -28,25 +28,11 @@
 
 点击右上角的 "Fork" 按钮，将本仓库 fork 到你的账户。
 
-### 2. 获取账号信息
+### 2. 准备账号信息
 
-对于每个需要签到的账号，你需要获取：(可借助 [在线 Secrets 配置生成器](https://millylee.github.io/anyrouter-check-in/))
+推荐直接使用 AgentRouter 的邮箱和密码登录。脚本会打开 https://agentrouter.org/login，登录成功后自动获取 cookies 与用户标识并完成签到。
 
-1. **Cookies**: 用于身份验证
-2. **API User**: 用于请求头的 new-api-user 参数（自己配置其它平台时该值需要注意匹配）
-
-#### 获取 Cookies：
-
-1. 打开浏览器，访问 https://anyrouter.top/
-2. 登录你的账户
-3. 打开开发者工具 (F12)
-4. 切换到 "Application" 或 "存储" 选项卡
-5. 找到 "Cookies" 选项
-6. 复制所有 cookies
-
-#### 获取 API User：
-
-按照下方图片教程操作获得。
+如果你仍使用 session cookies 兼容模式，可借助 [在线 Secrets 配置生成器](https://millylee.github.io/anyrouter-check-in/) 获取 Cookies 与 API User。
 
 ### 3. 设置 GitHub Environment Secret
 
@@ -60,7 +46,7 @@
 
 ### 4. 多账号配置格式
 
-支持单个与多个账号配置，可选 `name` 和 `provider` 字段：
+支持单个与多个账号配置，可选 `name` 和 `provider` 字段。未指定 `provider` 时默认使用 `agentrouter`：
 
 ```json
 [
@@ -83,12 +69,12 @@
 - `email` + `password`：推荐的浏览器登录方式，登录成功后会自动获取 cookies 与用户标识
 - `cookies`：兼容旧版的 session cookies 登录方式
 - `api_user`：session cookies 登录时用于请求头的 new-api-user 参数；邮箱密码登录可省略
-- `provider` (可选)：指定使用的服务商，默认为 `anyrouter`
+- `provider` (可选)：指定使用的服务商，默认为 `agentrouter`
 - `name` (可选)：自定义账号显示名称，用于通知和日志中标识账号
 
 **默认值说明**：
 
-- 如果未提供 `provider` 字段，默认使用 `anyrouter`（向后兼容）
+- 如果未提供 `provider` 字段，默认使用 `agentrouter`
 - 如果未提供 `name` 字段，会使用 `Account 1`、`Account 2` 等默认名称
 - `anyrouter` 与 `agentrouter` 配置已内置，无需填写
 
@@ -106,14 +92,14 @@
 
 1. 在你的仓库中，点击 "Actions" 选项卡
 2. 如果提示启用 Actions，请点击启用
-3. 找到 "AnyRouter 自动签到" workflow
+3. 找到 "AgentRouter 自动签到" workflow
 4. 点击 "Enable workflow"
 
 ### 6. 测试运行
 
 你可以手动触发一次签到来测试：
 
-1. 在 "Actions" 选项卡中，点击 "AnyRouter 自动签到"
+1. 在 "Actions" 选项卡中，点击 "AgentRouter 自动签到"
 2. 点击 "Run workflow" 按钮
 3. 确认运行
 
@@ -121,7 +107,7 @@
 
 ## 执行时间
 
-- 脚本每 6 小时执行一次（1. action 无法准确触发，基本延时 1~1.5h；2. 目前观测到 anyrouter 的签到是每 24h 而不是零点就可签到）
+- 脚本每天执行一次，默认北京时间 09:25 触发；GitHub Actions 可能有一定延迟
 - 你也可以随时手动触发签到
 
 ## 注意事项
@@ -134,9 +120,28 @@
 
 ## 配置示例
 
-### 基础配置（向后兼容）
+### 基础配置（邮箱密码登录）
 
-假设你有两个账号需要签到，不指定 provider 时默认使用 anyrouter：
+假设你有两个 AgentRouter 账号需要签到，不指定 provider 时默认使用 agentrouter：
+
+```json
+[
+  {
+    "name": "AgentRouter 主账号",
+    "email": "account1@example.com",
+    "password": "account1_password"
+  },
+  {
+    "name": "AgentRouter 备用",
+    "email": "account2@example.com",
+    "password": "account2_password"
+  }
+]
+```
+
+### Session 配置（向后兼容）
+
+如果你仍想使用旧版 cookies 方式：
 
 ```json
 [
@@ -164,18 +169,14 @@
   {
     "name": "AnyRouter 主账号",
     "provider": "anyrouter",
-    "cookies": {
-      "session": "abc123session"
-    },
-    "api_user": "user123"
+    "email": "anyrouter@example.com",
+    "password": "anyrouter_password"
   },
   {
     "name": "AgentRouter 备用",
     "provider": "agentrouter",
-    "cookies": {
-      "session": "xyz789session"
-    },
-    "api_user": "user456"
+    "email": "agentrouter@example.com",
+    "password": "agentrouter_password"
   }
 ]
 ```
@@ -261,6 +262,7 @@
   - `bypass_method: "waf_cookies"`（需要先获取 WAF cookies，然后执行签到）
   - `sign_in_path: "/api/user/sign_in"`
 - `agentrouter`：
+  - `login_path: "/login"`（邮箱密码登录入口）
   - `bypass_method: "waf_cookies"`（需要获取 `acw_tc`）
   - `sign_in_path: null`（查询用户信息时自动签到）
   - `use_proxy: true`
@@ -366,7 +368,7 @@ uv run python -m cloakbrowser install
 # 创建 .env 文件并配置（注意：JSON 必须是单行格式）
 # 示例：
 # ANYROUTER_ACCOUNTS=[{"name":"账号1","email":"your@email.com","password":"your_password"}]
-# PROVIDERS={"agentrouter":{"domain":"https://agentrouter.org"}}
+# PROVIDERS={"agentrouter":{"domain":"https://agentrouter.org","login_path":"/login"}}
 # PROXY_SUBSCRIPTION_URL=https://example.com/sub?token=xxx
 # CHECKIN_PROXY_URL=http://127.0.0.1:7890
 

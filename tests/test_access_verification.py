@@ -18,7 +18,7 @@ def test_access_verification_detection_ignores_normal_login_shell():
 
 def test_access_verification_error_points_to_proxy_configuration():
 	message = _format_access_verification_error(
-		{'url': 'https://agentrouter.org/register', 'title': 'Verification', 'bodySnippet': 'Access Verification'},
+		{'url': 'https://agentrouter.org/login', 'title': 'Verification', 'bodySnippet': 'Access Verification'},
 		provider='agentrouter',
 	)
 

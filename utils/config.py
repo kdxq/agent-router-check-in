@@ -65,8 +65,6 @@ class ProviderConfig:
 
 	def login_url(self) -> str:
 		"""返回网页登录入口地址。"""
-		if self.name == 'agentrouter':
-			return 'https://agentrouter.org/register'
 		return f'{self.domain}{self.login_path}'
 
 	def needs_waf_cookies(self) -> bool:

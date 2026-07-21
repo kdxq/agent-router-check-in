@@ -59,7 +59,17 @@ LOGIN_PAGE_READY_SELECTORS = (
 	'button:has(.semi-icon-mail)',
 )
 LOGIN_FORM_SELECTOR = 'form.semi-form'
-USERNAME_SELECTORS = ('#username', 'input[name="username"]', 'input[name="email"]', 'input[type="email"]')
+USERNAME_SELECTORS = (
+	'#username',
+	'input[name="username"]',
+	'input[name="email"]',
+	'input[type="email"]',
+	'input[placeholder*="邮箱"]',
+	'input[placeholder*="账号"]',
+	'input[placeholder*="用户"]',
+	'input[placeholder*="Email" i]',
+	'input[placeholder*="Username" i]',
+)
 PASSWORD_SELECTORS = ('#password', 'input[name="password"]', 'input[type="password"]')  # nosec B105
 SUBMIT_SELECTORS = (
 	f'{LOGIN_FORM_SELECTOR} button[type="submit"]',
@@ -137,7 +147,17 @@ _OPEN_EMAIL_FORM_JS = """() => {
 
 	const inDialog = (el) => !!el?.closest('[role="dialog"][aria-modal="true"], .semi-modal-content[role="dialog"]');
 
-	const usernameSelectors = ['#username', 'input[name="username"]', 'input[name="email"]', 'input[type="email"]'];
+	const usernameSelectors = [
+		'#username',
+		'input[name="username"]',
+		'input[name="email"]',
+		'input[type="email"]',
+		'input[placeholder*="邮箱"]',
+		'input[placeholder*="账号"]',
+		'input[placeholder*="用户"]',
+		'input[placeholder*="Email" i]',
+		'input[placeholder*="Username" i]',
+	];
 	const findUsername = () => {
 		for (const selector of usernameSelectors) {
 			const el = document.querySelector(selector);
